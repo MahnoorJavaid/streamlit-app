@@ -31,23 +31,21 @@ DB_PATH = "data/users.db"
 RESULTS_PATH = "data/test_results.json"
 UPLOADS_FOLDER = "uploads"
 
-# Math topics - 2 questions each = 12 total
+# Math topics - 2 questions each = 10 total
 MATH_TOPICS = [
     "Algebra",
-    "Calculus",
-    "Trigonometry",
-    "Geometry",
-    "Statistics",
-    "Matrices"
+    "Rational Number System",
+    "Ratio and Proportion",
+    "Percentage",
+    "Geometry"
 ]
 
 TOPIC_DESCRIPTIONS = {
-    "Algebra": "Equations, Inequalities, Functions, Polynomials",
-    "Calculus": "Differentiation, Integration, Applications",
-    "Trigonometry": "Identities, Equations, Graphs, Applications",
-    "Geometry": "Coordinate Geometry, Theorems, Transformations",
-    "Statistics": "Probability, Data Analysis, Distributions",
-    "Matrices": "Operations, Determinants, Systems of Equations"
+    "Algebra": "Linear Equations, Quadratic Equations, Polynomials",
+    "Rational Number System": "Rational Numbers, Operations, Properties",
+    "Ratio and Proportion": "Ratios, Proportions, Direct/Inverse Variation",
+    "Percentage": "Percentage Calculations, Applications, Problems",
+    "Geometry": "Shapes, Area, Perimeter, Volume, Theorems"
 }
 
 # API Configuration
@@ -248,11 +246,12 @@ def process_with_deepseek(input_text, system_prompt):
         return f"[DeepSeek Error: {str(e)}]"
 
 
-def analyze_test_images(questions_data):
+def analyze_test_images(questions_data, show_debug=True):
     """
     Analyze all test images through AI pipeline
     questions_data: list of dicts with {topic, question_num, images: [image_bytes, ...]}
     Each question can have multiple images (for multi-page solutions)
+    show_debug: If True, display debug information during processing
     """
     from questions import MATH_QUESTIONS
 
@@ -262,6 +261,12 @@ def analyze_test_images(questions_data):
 
     progress_bar = st.progress(0)
     status_text = st.empty()
+
+    # Container for debug info
+    if show_debug:
+        st.markdown("---")
+        st.markdown("### 🔍 AI Pipeline Debug Information")
+        debug_container = st.container()
 
     # Process each question (which may have multiple images)
     for idx, question_data in enumerate(questions_data):
@@ -328,6 +333,24 @@ STUDENT'S EXTRACTED SOLUTION (Complete):
             'score': score
         })
 
+        # ===== DEBUG INFO DISPLAY =====
+        if show_debug:
+            with debug_container:
+                with st.expander(f"📄 {topic} - Question {question_num} | Score: {score}/1", expanded=False):
+                    st.markdown("#### 🔹 Step 1: Qwen-VL Extraction")
+                    st.markdown(f"*Extracted from {num_images} image(s)*")
+                    st.code(combined_extraction, language="text")
+
+                    st.markdown("---")
+                    st.markdown("#### 🔹 Step 2: DeepSeek Analysis & Scoring")
+                    st.markdown(deepseek_output)
+
+                    st.markdown("---")
+                    if score == 1:
+                        st.success(f"✅ **Score: {score}/1** - Correct Answer")
+                    else:
+                        st.error(f"❌ **Score: {score}/1** - Incorrect Answer")
+
         # Update progress
         progress_bar.progress((idx + 1) / len(questions_data))
 
@@ -346,6 +369,18 @@ STUDENT'S EXTRACTED SOLUTION (Complete):
 
     final_feedback = process_with_deepseek(aggregated_input, DEEPSEEK_PROMPT_2)
 
+    # ===== DEBUG INFO FOR FINAL ANALYSIS =====
+    if show_debug:
+        with debug_container:
+            st.markdown("---")
+            with st.expander("📊 Step 3: Final Comprehensive Analysis (DeepSeek #2)", expanded=True):
+                st.markdown("#### 📥 Input to DeepSeek #2 (Aggregated Data)")
+                st.code(aggregated_input, language="text")
+
+                st.markdown("---")
+                st.markdown("#### 📤 Output from DeepSeek #2 (Final Feedback)")
+                st.info(final_feedback)
+
     progress_bar.empty()
     status_text.empty()
 
@@ -353,7 +388,8 @@ STUDENT'S EXTRACTED SOLUTION (Complete):
         'total_score': total_score,
         'topic_scores': topic_scores,
         'individual_analyses': all_analyses,
-        'final_feedback': final_feedback
+        'final_feedback': final_feedback,
+        'aggregated_input': aggregated_input  # Store for debug reference
     }
 
 # ==================== SESSION STATE INITIALIZATION ====================
@@ -575,7 +611,7 @@ def dashboard_page():
 
         st.markdown("---")
         st.markdown("### 📚 Topics Covered in Each Test")
-        st.markdown("*Each test contains 12 questions (2 per topic)*")
+        st.markdown("*Each test contains 10 questions (2 per topic)*")
 
         cols = st.columns(3)
         for idx, topic in enumerate(MATH_TOPICS):
@@ -593,14 +629,14 @@ def dashboard_page():
         with col2:
             avg_score = sum(t.get('total_score', 0)
                             for t in tests) / len(tests)
-            st.metric("📈 Average Score", f"{avg_score:.1f}/12")
+            st.metric("📈 Average Score", f"{avg_score:.1f}/10")
 
         with col3:
             latest_score = tests[0].get('total_score', 0)
-            st.metric("🎯 Latest Score", f"{latest_score}/12")
+            st.metric("🎯 Latest Score", f"{latest_score}/10")
 
         with col4:
-            avg_percentage = (avg_score / 12) * 100
+            avg_percentage = (avg_score / 10) * 100
             st.metric("✨ Average %", f"{avg_percentage:.0f}%")
 
         st.markdown("---")
@@ -627,8 +663,8 @@ def dashboard_page():
 
             fig.update_layout(
                 xaxis_title="Test Date",
-                yaxis_title="Score (out of 12)",
-                yaxis=dict(range=[0, 13]),
+                yaxis_title="Score (out of 10)",
+                yaxis=dict(range=[0, 11]),
                 height=400,
                 hovermode='x unified'
             )
@@ -731,9 +767,9 @@ def dashboard_page():
             test_date = datetime.fromisoformat(
                 test['timestamp']).strftime('%B %d, %Y at %H:%M')
             score = test.get('total_score', 0)
-            percentage = (score / 12) * 100
+            percentage = (score / 10) * 100
 
-            with st.expander(f"Test #{idx} - {test_date} - Score: {score}/12 ({percentage:.0f}%)"):
+            with st.expander(f"Test #{idx} - {test_date} - Score: {score}/10 ({percentage:.0f}%)"):
                 col1, col2 = st.columns([2, 1])
 
                 with col1:
@@ -745,7 +781,7 @@ def dashboard_page():
                         st.write(f"{emoji} {topic}: {topic_score}/2")
 
                 with col2:
-                    st.metric("Total Score", f"{score}/12")
+                    st.metric("Total Score", f"{score}/10")
                     st.metric("Percentage", f"{percentage:.0f}%")
 
                 if test.get('final_feedback'):
@@ -773,7 +809,7 @@ def test_page():
 
     st.info("""
     **📋 Test Instructions:**
-    - This test contains **12 questions** (2 from each topic)
+    - This test contains **10 questions** (2 from each topic)
     - Upload **one or more images** for each question (for multi-page solutions)
     - Make sure your work is **legible and complete**
     - For solutions spanning multiple pages, upload all pages in order
@@ -857,17 +893,17 @@ def test_page():
     total_images = sum(len(q['images'])
                        for q in st.session_state.test_images.values())
     st.write(
-        f"**Uploaded: {uploaded_count}/12 questions ({total_images} total images)**")
+        f"**Uploaded: {uploaded_count}/10 questions ({total_images} total images)**")
 
-    if uploaded_count < 12:
+    if uploaded_count < 10:
         st.warning(
-            f"⚠️ Please upload images for all 12 questions. {12 - uploaded_count} remaining.")
+            f"⚠️ Please upload images for all 10 questions. {10 - uploaded_count} remaining.")
 
     col1, col2, col3 = st.columns([1, 1, 1])
 
     with col2:
-        if st.button("🚀 Submit Test for AI Analysis", use_container_width=True, type="primary", disabled=(uploaded_count < 12)):
-            if uploaded_count == 12:
+        if st.button("🚀 Submit Test for AI Analysis", use_container_width=True, type="primary", disabled=(uploaded_count < 10)):
+            if uploaded_count == 10:
                 # Process test
                 with st.spinner("🤖 AI is analyzing your test... This may take a few minutes."):
 
