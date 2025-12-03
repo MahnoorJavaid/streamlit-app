@@ -19,8 +19,8 @@ load_dotenv()
 
 # Page configuration
 st.set_page_config(
-    page_title="AI Math Tutor - Professional",
-    page_icon="📊",
+    page_title="AI Math Tutor",
+    page_icon="",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -620,7 +620,7 @@ def render_sidebar():
 
 def login_page():
     """Login page UI"""
-    st.title("AI Math Tutor - Professional Edition")
+    st.title("AI Math Tutor")
 
     col1, col2, col3 = st.columns([1, 2, 1])
 
