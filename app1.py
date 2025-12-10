@@ -1,5 +1,4 @@
 import streamlit as st
-import sqlite3
 import hashlib
 import json
 import requests
@@ -13,6 +12,7 @@ import plotly.graph_objects as go
 import time
 from prompts import QWEN_PROMPT, DEEPSEEK_PROMPT_1, DEEPSEEK_PROMPT_2
 from questions import MATH_QUESTIONS
+from supabase_db import create_user, verify_user, get_user_tests, save_test_result
 
 # Load environment variables
 load_dotenv()
@@ -99,8 +99,6 @@ st.markdown("""
 
 # ==================== CONSTANTS ====================
 
-DB_PATH = "data/users.db"
-RESULTS_PATH = "data/test_results.json"
 UPLOADS_FOLDER = "uploads"
 
 # Math topics - 2 questions each = 10 total
@@ -130,129 +128,24 @@ DEEPSEEK_API_KEY = os.getenv('DEEPSEEK_API_KEY')
 DEEPSEEK_MODEL = os.getenv('DEEPSEEK_MODEL', 'deepseek-chat')
 
 # Ensure directories exist
-os.makedirs("data", exist_ok=True)
 os.makedirs(UPLOADS_FOLDER, exist_ok=True)
 
-# ==================== DATABASE FUNCTIONS ====================
-
-
-def init_db():
-    """Initialize SQLite database"""
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT UNIQUE NOT NULL,
-            password TEXT NOT NULL,
-            name TEXT NOT NULL,
-            gender TEXT NOT NULL,
-            grade TEXT NOT NULL,
-            age INTEGER NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    ''')
-
-    conn.commit()
-    conn.close()
-
-
-def hash_password(password):
-    """Hash password using SHA256"""
-    return hashlib.sha256(password.encode()).hexdigest()
-
-
-def create_user(username, password, name, gender, grade, age):
-    """Create new user account"""
-    try:
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
-
-        hashed_pwd = hash_password(password)
-        cursor.execute('''
-            INSERT INTO users (username, password, name, gender, grade, age)
-            VALUES (?, ?, ?, ?, ?, ?)
-        ''', (username, hashed_pwd, name, gender, grade, age))
-
-        conn.commit()
-        conn.close()
-        return True, "Account created successfully!"
-    except sqlite3.IntegrityError:
-        return False, "Username already exists!"
-    except Exception as e:
-        return False, f"Error: {str(e)}"
-
-
-def verify_user(username, password):
-    """Verify user credentials"""
-    try:
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
-
-        hashed_pwd = hash_password(password)
-        cursor.execute('''
-            SELECT id, name, gender, grade, age FROM users 
-            WHERE username = ? AND password = ?
-        ''', (username, hashed_pwd))
-
-        result = cursor.fetchone()
-        conn.close()
-
-        if result:
-            return True, {
-                'id': result[0],
-                'username': username,
-                'name': result[1],
-                'gender': result[2],
-                'grade': result[3],
-                'age': result[4]
-            }
-        return False, None
-    except Exception as e:
-        return False, None
-
-# ==================== TEST RESULTS FUNCTIONS ====================
-
-
-def get_user_tests(username):
-    """Get all test results for a user"""
-    try:
-        if not os.path.exists(RESULTS_PATH):
-            return []
-
-        with open(RESULTS_PATH, 'r') as f:
-            all_results = json.load(f)
-
-        user_results = [r for r in all_results if r.get(
-            'username') == username]
-        return sorted(user_results, key=lambda x: x.get('timestamp', ''), reverse=True)
-    except:
-        return []
-
-
-def save_test_result(username, test_data):
-    """Save test result to JSON file"""
-    try:
-        if os.path.exists(RESULTS_PATH):
-            with open(RESULTS_PATH, 'r') as f:
-                results = json.load(f)
-        else:
-            results = []
-
-        test_data['username'] = username
-        test_data['timestamp'] = datetime.now().isoformat()
-        results.append(test_data)
-
-        with open(RESULTS_PATH, 'w') as f:
-            json.dump(results, f, indent=2)
-
-        return True
-    except Exception as e:
-        st.error(f"Error saving result: {str(e)}")
-        return False
-
 # ==================== AI PROCESSING FUNCTIONS ====================
+
+# MODIFIED PROMPT FOR QWEN - YOU NEED TO UPDATE prompts.py
+QWEN_DETECTION_PROMPT = """Analyze this image and extract:
+1. The QUESTION NUMBER (e.g., "Question 1", "Q1", "1)", etc.)
+2. The TOPIC if mentioned (Algebra, Geometry, Percentage, etc.)
+3. The complete solution written by the student
+4. Whether this appears to be a CONTINUATION PAGE (no question number, continuing from previous work)
+
+Format your response as:
+QUESTION_NUMBER: [detected number or "UNKNOWN"]
+TOPIC: [detected topic or "UNKNOWN"]
+IS_CONTINUATION: [YES/NO]
+SOLUTION:
+[extracted solution text]
+"""
 
 
 def process_image_with_qwen(image_base64, prompt):
@@ -318,6 +211,209 @@ def process_with_deepseek(input_text, system_prompt):
         return f"[DeepSeek Error: {str(e)}]"
 
 
+def parse_qwen_detection(qwen_output):
+    """Parse Qwen output to extract question number and solution"""
+    result = {
+        'question_number': 'UNKNOWN',
+        'topic': 'UNKNOWN',
+        'is_continuation': False,
+        'solution': qwen_output
+    }
+
+    try:
+        lines = qwen_output.split('\n')
+        for line in lines:
+            if line.startswith('QUESTION_NUMBER:'):
+                result['question_number'] = line.split(':', 1)[1].strip()
+            elif line.startswith('TOPIC:'):
+                result['topic'] = line.split(':', 1)[1].strip()
+            elif line.startswith('IS_CONTINUATION:'):
+                result['is_continuation'] = 'YES' in line.upper()
+            elif line.startswith('SOLUTION:'):
+                # Get everything after SOLUTION:
+                idx = qwen_output.find('SOLUTION:')
+                result['solution'] = qwen_output[idx + 9:].strip()
+                break
+    except Exception as e:
+        # If parsing fails, return raw output as solution
+        pass
+
+    return result
+
+
+def detect_and_group_images(uploaded_images, log_container):
+    """
+    Detect question numbers in images and group them accordingly
+    Returns: dict mapping question keys to list of images
+    """
+    from questions import MATH_QUESTIONS
+
+    with log_container:
+        st.markdown("## Step 1: AI Detection of Question Numbers")
+        st.info(
+            f"Analyzing {len(uploaded_images)} uploaded image(s) to detect question numbers...")
+
+    detected_images = []
+
+    # Process each image with Qwen for detection
+    for img_idx, image_bytes in enumerate(uploaded_images, 1):
+        with log_container:
+            st.markdown(
+                f"### Analyzing Image {img_idx}/{len(uploaded_images)}")
+            detection_status = st.empty()
+
+        detection_status.info(
+            f"Detecting question number in image {img_idx}...")
+
+        image_base64 = base64.b64encode(image_bytes).decode('utf-8')
+        qwen_output = process_image_with_qwen(
+            image_base64, QWEN_DETECTION_PROMPT)
+        parsed = parse_qwen_detection(qwen_output)
+
+        detected_images.append({
+            'image_idx': img_idx,
+            'image_bytes': image_bytes,
+            'detected_question': parsed['question_number'],
+            'detected_topic': parsed['topic'],
+            'is_continuation': parsed['is_continuation'],
+            'solution': parsed['solution'],
+            'raw_output': qwen_output
+        })
+
+        with log_container:
+            if parsed['question_number'] != 'UNKNOWN':
+                detection_status.success(
+                    f"Detected: Question {parsed['question_number']} | Topic: {parsed['topic']}")
+            elif parsed['is_continuation']:
+                detection_status.warning(
+                    f"Detected: Continuation page (no question number)")
+            else:
+                detection_status.error(f"Could not detect question number")
+
+            with st.expander(f"View raw detection output for Image {img_idx}"):
+                st.code(qwen_output, language="text")
+
+    # Group images by question number
+    with log_container:
+        st.markdown("---")
+        st.markdown("## Step 2: Grouping Images by Question")
+
+    grouped_questions = {}
+    current_question = None
+
+    for img_data in detected_images:
+        if img_data['detected_question'] != 'UNKNOWN':
+            # New question detected
+            current_question = img_data['detected_question']
+            if current_question not in grouped_questions:
+                grouped_questions[current_question] = []
+            grouped_questions[current_question].append(img_data)
+        elif img_data['is_continuation'] and current_question:
+            # Continuation of previous question
+            grouped_questions[current_question].append(img_data)
+        else:
+            # Unidentified image - create special group
+            if 'UNIDENTIFIED' not in grouped_questions:
+                grouped_questions['UNIDENTIFIED'] = []
+            grouped_questions['UNIDENTIFIED'].append(img_data)
+
+    # Display grouping results
+    with log_container:
+        st.markdown("### Grouping Results:")
+
+        for q_num, images in grouped_questions.items():
+            if q_num == 'UNIDENTIFIED':
+                st.error(
+                    f"Question: UNIDENTIFIED - {len(images)} image(s) could not be matched")
+            else:
+                st.success(
+                    f"Question {q_num}: {len(images)} image(s) grouped together")
+
+        st.markdown("---")
+
+    return grouped_questions, detected_images
+
+
+def map_to_test_structure(grouped_questions, log_container):
+    """
+    Map detected questions to actual test structure (5 topics x 2 questions)
+    Returns: list of dicts with {topic, question_num, images}
+    """
+    from questions import MATH_QUESTIONS
+
+    with log_container:
+        st.markdown("## Step 3: Mapping to Test Structure")
+        st.info("Matching detected questions to the 10-question test format...")
+
+    # Create mapping of question numbers to test structure
+    # Expected: Q1-Q10 or Question 1-10
+    test_questions = []
+    mapped_count = 0
+
+    for topic_idx, topic in enumerate(MATH_TOPICS):
+        for q_num in [1, 2]:
+            # Calculate expected question number (1-10)
+            expected_q_num = (topic_idx * 2) + q_num
+
+            # Try to find matching detected question
+            found = False
+            for detected_q_key in grouped_questions.keys():
+                if detected_q_key == 'UNIDENTIFIED':
+                    continue
+
+                # Try to extract number from detected question
+                detected_num_str = ''.join(filter(str.isdigit, detected_q_key))
+                if detected_num_str and int(detected_num_str) == expected_q_num:
+                    # Found match
+                    images_list = [img['image_bytes']
+                                   for img in grouped_questions[detected_q_key]]
+                    test_questions.append({
+                        'topic': topic,
+                        'question_num': q_num,
+                        'images': images_list,
+                        'detected_key': detected_q_key
+                    })
+                    mapped_count += 1
+                    found = True
+                    break
+
+            if not found:
+                # Question not found
+                test_questions.append({
+                    'topic': topic,
+                    'question_num': q_num,
+                    'images': [],
+                    'detected_key': None
+                })
+
+    # Display mapping results
+    with log_container:
+        st.markdown("### Mapping Results:")
+        st.info(f"Successfully mapped {mapped_count}/10 questions")
+
+        # Show detailed mapping
+        for idx, q_data in enumerate(test_questions, 1):
+            if q_data['images']:
+                st.success(
+                    f"Q{idx} ({q_data['topic']} - Q{q_data['question_num']}): {len(q_data['images'])} image(s) - Detected as '{q_data['detected_key']}'")
+            else:
+                st.error(
+                    f"Q{idx} ({q_data['topic']} - Q{q_data['question_num']}): NO IMAGES FOUND")
+
+        # Handle unidentified images
+        if 'UNIDENTIFIED' in grouped_questions:
+            st.warning(
+                f"WARNING: {len(grouped_questions['UNIDENTIFIED'])} image(s) could not be identified")
+            with st.expander("View unidentified images"):
+                for img_data in grouped_questions['UNIDENTIFIED']:
+                    st.markdown(f"**Image {img_data['image_idx']}:**")
+                    st.code(img_data['raw_output'], language="text")
+
+        st.markdown("---")
+
+    return test_questions
+
+
 def analyze_test_images_with_streaming(questions_data, log_container):
     """
     Analyze all test images through AI pipeline with real-time streaming logs
@@ -334,8 +430,14 @@ def analyze_test_images_with_streaming(questions_data, log_container):
     progress_bar = st.progress(0)
     status_text = st.empty()
 
+    with log_container:
+        st.markdown("## Step 4: Analyzing Solutions & Scoring")
+        st.markdown("---")
+
     # Process each question
-    for idx, question_data in enumerate(questions_data):
+    valid_questions = [q for q in questions_data if q['images']]
+
+    for idx, question_data in enumerate(valid_questions):
         topic = question_data['topic']
         question_num = question_data['question_num']
         images_list = question_data['images']
@@ -343,14 +445,14 @@ def analyze_test_images_with_streaming(questions_data, log_container):
 
         # Create question section in log
         with log_container:
-            st.markdown(f"### Question {idx + 1}: {topic} - Q{question_num}")
+            st.markdown(f"### Question: {topic} - Q{question_num}")
             st.markdown(f"**Pages uploaded:** {num_images}")
             st.markdown("---")
 
-            # Step 1: Qwen Extraction
+            # Step: Qwen Extraction (already done in detection phase, just consolidate)
             qwen_container = st.container()
             with qwen_container:
-                st.markdown("#### Step 1: Qwen-VL Text Extraction")
+                st.markdown("#### Qwen-VL Text Extraction")
                 qwen_status = st.empty()
                 qwen_output_box = st.empty()
 
@@ -372,13 +474,14 @@ def analyze_test_images_with_streaming(questions_data, log_container):
 
         # Display Qwen output
         with log_container:
-            qwen_status.success(f"Extraction complete ({num_images} page(s))")
+            qwen_status.success(
+                f"Extraction complete ({num_images} page(s))")
             with qwen_output_box.container():
                 st.code(combined_extraction, language="text")
 
-        # Step 2: DeepSeek Analysis
+        # DeepSeek Analysis
         with log_container:
-            st.markdown("#### Step 2: DeepSeek Analysis & Scoring")
+            st.markdown("#### DeepSeek Analysis & Scoring")
             deepseek_status = st.empty()
             deepseek_output_box = st.empty()
 
@@ -429,12 +532,12 @@ STUDENT'S EXTRACTED SOLUTION (Complete):
             'score': score
         })
 
-        progress_bar.progress((idx + 1) / len(questions_data))
+        progress_bar.progress((idx + 1) / len(valid_questions))
 
-    # Step 3: Final Comprehensive Analysis
+    # Final Comprehensive Analysis
     with log_container:
         st.markdown("## Final Comprehensive Analysis")
-        st.markdown("### Step 3: Complete Student Assessment")
+        st.markdown("### Step 5: Complete Student Assessment")
         final_status = st.empty()
         final_output_box = st.empty()
 
@@ -475,91 +578,6 @@ STUDENT'S EXTRACTED SOLUTION (Complete):
     }
 
 
-def analyze_test_images(questions_data, show_debug=False):
-    """
-    Standard analysis without streaming (for backward compatibility)
-    """
-    from questions import MATH_QUESTIONS
-
-    all_analyses = []
-    total_score = 0
-    topic_scores = {topic: 0 for topic in MATH_TOPICS}
-
-    progress_bar = st.progress(0)
-    status_text = st.empty()
-
-    for idx, question_data in enumerate(questions_data):
-        topic = question_data['topic']
-        question_num = question_data['question_num']
-        images_list = question_data['images']
-        num_images = len(images_list)
-
-        status_text.text(
-            f"Processing {topic} - Question {question_num} ({num_images} image(s))...")
-
-        extracted_texts = []
-        for img_idx, image_bytes in enumerate(images_list, 1):
-            image_base64 = base64.b64encode(image_bytes).decode('utf-8')
-            qwen_output = process_image_with_qwen(image_base64, QWEN_PROMPT)
-            extracted_texts.append(f"--- Page {img_idx} ---\n{qwen_output}")
-
-        combined_extraction = "\n\n".join(extracted_texts)
-        if num_images > 1:
-            combined_extraction = f"[MULTI-PAGE SOLUTION - {num_images} pages]\n\n{combined_extraction}"
-
-        actual_question = MATH_QUESTIONS[topic][f"question_{question_num}"]
-        deepseek_input = f"""ORIGINAL QUESTION:
-{actual_question}
-
-STUDENT'S EXTRACTED SOLUTION (Complete):
-{combined_extraction}"""
-
-        deepseek_output = process_with_deepseek(
-            deepseek_input, DEEPSEEK_PROMPT_1)
-
-        score = 0
-        if "SCORE: 1" in deepseek_output or "CORRECT: Yes" in deepseek_output.upper():
-            score = 1
-
-        total_score += score
-        topic_scores[topic] += score
-
-        all_analyses.append({
-            'topic': topic,
-            'question_num': question_num,
-            'num_pages': num_images,
-            'qwen_output': combined_extraction,
-            'deepseek_output': deepseek_output,
-            'score': score
-        })
-
-        progress_bar.progress((idx + 1) / len(questions_data))
-
-    status_text.text("Generating comprehensive feedback...")
-
-    aggregated_input = "=== STUDENT TEST ANALYSIS - ALL RESPONSES ===\n\n"
-    for analysis in all_analyses:
-        aggregated_input += f"--- {analysis['topic']} - Question {analysis['question_num']} "
-        if analysis['num_pages'] > 1:
-            aggregated_input += f"({analysis['num_pages']} pages) "
-        aggregated_input += "---\n"
-        aggregated_input += f"Score: {analysis['score']}/1\n"
-        aggregated_input += analysis['deepseek_output']
-        aggregated_input += "\n\n" + "="*50 + "\n\n"
-
-    final_feedback = process_with_deepseek(aggregated_input, DEEPSEEK_PROMPT_2)
-
-    progress_bar.empty()
-    status_text.empty()
-
-    return {
-        'total_score': total_score,
-        'topic_scores': topic_scores,
-        'individual_analyses': all_analyses,
-        'final_feedback': final_feedback,
-        'aggregated_input': aggregated_input
-    }
-
 # ==================== SESSION STATE INITIALIZATION ====================
 
 
@@ -569,7 +587,7 @@ def init_session_state():
         'page': 'login',
         'logged_in': False,
         'user': None,
-        'test_images': {},
+        'uploaded_images': [],
         'current_test_result': None
     }
 
@@ -600,7 +618,7 @@ def render_sidebar():
         if st.button("Take New Test", use_container_width=True,
                      type="primary" if st.session_state.page == 'test' else "secondary"):
             st.session_state.page = 'test'
-            st.session_state.test_images = {}
+            st.session_state.uploaded_images = []
             st.rerun()
 
         if st.button("View AI Logs", use_container_width=True,
@@ -796,7 +814,7 @@ def dashboard_page():
         st.info("Welcome! You haven't taken any tests yet.")
         st.markdown("### Get Started")
         st.markdown(
-            "Click 'Take New Test' in the sidebar to begin your first mathematics assessment.")
+            "Click **'Take New Test'** in the sidebar to begin your first mathematics assessment.")
 
         st.markdown("---")
         st.markdown("### Topics Covered in Each Test")
@@ -826,7 +844,7 @@ def dashboard_page():
 
         with col4:
             avg_percentage = (avg_score / 10) * 100
-            st.metric("Average Percentage", f"{avg_percentage:.0f}%")
+            st.metric("Average %", f"{avg_percentage:.0f}%")
 
         st.markdown("---")
 
@@ -875,8 +893,8 @@ def dashboard_page():
             for topic, scores in topic_scores.items()
         }
 
-        colors = ['#E74C3C' if v < 1 else '#F39C12' if v <
-                  1.5 else '#27AE60' for v in topic_averages.values()]
+        colors = ['#E74C3C' if v < 1 else '#F39C12' if v < 1.5 else '#27AE60'
+                  for v in topic_averages.values()]
 
         fig = go.Figure(data=[
             go.Bar(
@@ -916,7 +934,7 @@ def dashboard_page():
                 st.markdown("#### Strong Areas")
                 if ai_analysis['strong_topics']:
                     for topic in ai_analysis['strong_topics']:
-                        st.success(f"{topic}")
+                        st.success(f"- {topic}")
                 else:
                     st.info("Keep practicing to build your strengths!")
 
@@ -924,7 +942,7 @@ def dashboard_page():
                 st.markdown("#### Areas to Improve")
                 if ai_analysis['weak_topics']:
                     for topic in ai_analysis['weak_topics']:
-                        st.warning(f"{topic}")
+                        st.warning(f"- {topic}")
                 else:
                     st.success("All topics are strong!")
 
@@ -970,7 +988,7 @@ def dashboard_page():
 
 
 def test_page():
-    """Test taking page with multiple image upload support"""
+    """Test taking page with collective upload at the end"""
     user = st.session_state.user
 
     # Render sidebar
@@ -981,20 +999,19 @@ def test_page():
 
     st.info("""
     **Test Instructions:**
-    - This test contains 10 questions (2 from each topic)
-    - Upload one or more images for each question (for multi-page solutions)
-    - Ensure your work is legible and complete
-    - For solutions spanning multiple pages, upload all pages in order
-    - Click Submit Test when all images are uploaded
-    - AI will analyze your solutions and provide detailed feedback
+    - This test contains **10 questions** (2 from each topic)
+    - Review all questions below
+    - Write your solutions on paper with **question numbers clearly marked** (e.g., "Question 1", "Q1", etc.)
+    - For multi-page solutions, write the question number on the first page
+    - Upload **ALL solution images together** at the bottom
+    - AI will automatically detect which image belongs to which question
+    - Click **Submit Test** when all images are uploaded
     """)
 
     st.markdown("---")
 
-    if 'test_images' not in st.session_state:
-        st.session_state.test_images = {}
-
-    # Create upload sections for each topic
+    # Display all questions organized by topic
+    question_counter = 1
     for topic in MATH_TOPICS:
         st.markdown(f"### {topic}")
         st.caption(TOPIC_DESCRIPTIONS[topic])
@@ -1002,73 +1019,70 @@ def test_page():
         col1, col2 = st.columns(2)
 
         with col1:
-            st.markdown(f"**Question 1:**")
+            st.markdown(f"**Question {question_counter}:**")
             st.info(MATH_QUESTIONS[topic]["question_1"])
-
-            key1 = f"{topic}_q1"
-            uploaded_files1 = st.file_uploader(
-                f"Upload solution (multiple images for multi-page)",
-                type=['png', 'jpg', 'jpeg'],
-                key=key1,
-                accept_multiple_files=True
-            )
-            if uploaded_files1:
-                st.session_state.test_images[key1] = {
-                    'topic': topic,
-                    'question_num': 1,
-                    'images': [file.read() for file in uploaded_files1]
-                }
-                st.success(f"Uploaded {len(uploaded_files1)} image(s)")
-
-                for img_idx, img_bytes in enumerate(st.session_state.test_images[key1]['images'], 1):
-                    st.caption(f"Page {img_idx}")
-                    image = Image.open(io.BytesIO(img_bytes))
-                    st.image(image, use_column_width=True)
+            question_counter += 1
 
         with col2:
-            st.markdown(f"**Question 2:**")
+            st.markdown(f"**Question {question_counter}:**")
             st.info(MATH_QUESTIONS[topic]["question_2"])
-
-            key2 = f"{topic}_q2"
-            uploaded_files2 = st.file_uploader(
-                f"Upload solution (multiple images for multi-page)",
-                type=['png', 'jpg', 'jpeg'],
-                key=key2,
-                accept_multiple_files=True
-            )
-            if uploaded_files2:
-                st.session_state.test_images[key2] = {
-                    'topic': topic,
-                    'question_num': 2,
-                    'images': [file.read() for file in uploaded_files2]
-                }
-                st.success(f"Uploaded {len(uploaded_files2)} image(s)")
-
-                for img_idx, img_bytes in enumerate(st.session_state.test_images[key2]['images'], 1):
-                    st.caption(f"Page {img_idx}")
-                    image = Image.open(io.BytesIO(img_bytes))
-                    st.image(image, use_column_width=True)
+            question_counter += 1
 
         st.markdown("---")
+
+    # Collective upload section
+    st.markdown("## Upload All Solutions")
+    st.markdown("### Upload all your solution images below")
+
+    st.warning("""
+    **IMPORTANT:** 
+    - Make sure each solution has its question number written clearly
+    - For multi-page solutions, write the question number on the first page
+    - Upload images in any order - AI will organize them automatically
+    """)
+
+    uploaded_files = st.file_uploader(
+        "Select all solution images (you can upload multiple at once)",
+        type=['png', 'jpg', 'jpeg'],
+        accept_multiple_files=True,
+        key="collective_upload"
+    )
+
+    if uploaded_files:
+        st.session_state.uploaded_images = [
+            file.read() for file in uploaded_files]
+        st.success(f"Uploaded {len(uploaded_files)} image(s)")
+
+        # Show preview of uploaded images
+        st.markdown("### Preview of Uploaded Images")
+        cols = st.columns(min(4, len(uploaded_files)))
+        for idx, img_bytes in enumerate(st.session_state.uploaded_images):
+            with cols[idx % 4]:
+                st.caption(f"Image {idx + 1}")
+                image = Image.open(io.BytesIO(img_bytes))
+                st.image(image, use_column_width=True)
+    else:
+        st.session_state.uploaded_images = []
+
+    st.markdown("---")
 
     # Submit button
     st.markdown("### Ready to Submit?")
 
-    uploaded_count = len(st.session_state.test_images)
-    total_images = sum(len(q['images'])
-                       for q in st.session_state.test_images.values())
-    st.write(
-        f"**Uploaded: {uploaded_count}/10 questions ({total_images} total images)**")
+    uploaded_count = len(st.session_state.uploaded_images)
+    st.write(f"**Total images uploaded: {uploaded_count}**")
 
-    if uploaded_count < 10:
+    if uploaded_count == 0:
+        st.warning("Please upload at least one solution image.")
+    elif uploaded_count < 10:
         st.warning(
-            f"Please upload images for all 10 questions. {10 - uploaded_count} remaining.")
+            f"You've uploaded {uploaded_count} images. Typically, you should have at least 10 images (one per question). Continue if you have multi-page solutions.")
 
     col1, col2, col3 = st.columns([1, 1, 1])
 
     with col2:
-        if st.button("Submit Test for AI Analysis", use_container_width=True, type="primary", disabled=(uploaded_count < 10)):
-            if uploaded_count == 10:
+        if st.button("Submit Test for AI Analysis", use_container_width=True, type="primary", disabled=(uploaded_count == 0)):
+            if uploaded_count > 0:
                 # Navigate to AI logs page and start processing
                 st.session_state.page = 'ai_logs'
                 st.session_state.processing_test = True
@@ -1076,7 +1090,7 @@ def test_page():
 
 
 def ai_logs_page():
-    """AI Logs page showing real-time processing"""
+    """AI Logs page showing real-time processing with detection"""
     user = st.session_state.user
 
     # Render sidebar
@@ -1096,12 +1110,33 @@ def ai_logs_page():
             st.info("Starting AI analysis pipeline...")
             st.markdown("---")
 
-        # Prepare questions data
-        questions_for_analysis = list(st.session_state.test_images.values())
+        # Get uploaded images
+        uploaded_images = st.session_state.uploaded_images
 
-        # Run analysis with streaming
+        if not uploaded_images:
+            st.error("No images found to process!")
+            st.session_state.processing_test = False
+            return
+
+        # Step 1: Detect and group images
+        grouped_questions, detected_images = detect_and_group_images(
+            uploaded_images, log_container)
+
+        # Step 2: Map to test structure
+        test_questions = map_to_test_structure(
+            grouped_questions, log_container)
+
+        # Check if we have enough questions
+        valid_questions = [q for q in test_questions if q['images']]
+
+        with log_container:
+            if len(valid_questions) < 10:
+                st.warning(
+                    f"Warning: Only {len(valid_questions)}/10 questions were successfully mapped. Proceeding with available questions...")
+
+        # Step 3: Run analysis with streaming
         result = analyze_test_images_with_streaming(
-            questions_for_analysis, log_container)
+            test_questions, log_container)
 
         # Save result
         save_test_result(user['username'], result)
@@ -1117,8 +1152,8 @@ def ai_logs_page():
                 "Test analysis complete! Results saved to your dashboard.")
             st.balloons()
 
-        # Clear test images
-        st.session_state.test_images = {}
+        # Clear uploaded images
+        st.session_state.uploaded_images = []
 
     else:
         # Show most recent test logs if available
@@ -1145,12 +1180,12 @@ def ai_logs_page():
                     st.markdown(f"**Pages uploaded:** {analysis['num_pages']}")
                     st.markdown("---")
 
-                    st.markdown("#### Step 1: Qwen-VL Text Extraction")
+                    st.markdown("#### Step: Qwen-VL Text Extraction")
                     st.success(
                         f"Extraction complete ({analysis['num_pages']} page(s))")
                     st.code(analysis['qwen_output'], language="text")
 
-                    st.markdown("#### Step 2: DeepSeek Analysis & Scoring")
+                    st.markdown("#### Step: DeepSeek Analysis & Scoring")
                     st.success(
                         f"Analysis complete - Score: {analysis['score']}/1")
                     st.markdown(analysis['deepseek_output'])
@@ -1167,7 +1202,7 @@ def ai_logs_page():
 
             # Final analysis
             st.markdown("## Final Comprehensive Analysis")
-            st.markdown("### Step 3: Complete Student Assessment")
+            st.markdown("### Complete Student Assessment")
 
             if 'aggregated_input' in latest_test:
                 st.markdown("#### Aggregated Input to DeepSeek")
@@ -1183,7 +1218,6 @@ def ai_logs_page():
 
 def main():
     """Main application router"""
-    init_db()
     init_session_state()
 
     if not st.session_state.logged_in:
