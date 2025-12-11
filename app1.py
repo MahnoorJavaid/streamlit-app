@@ -542,7 +542,8 @@ STUDENT'S EXTRACTED SOLUTION (Complete):
         final_output_box = st.empty()
 
     status_text.text("Generating comprehensive feedback...")
-    final_status.info("🎓 Analyzing overall performance across all questions...")
+    final_status.info(
+        "🎓 Analyzing overall performance across all questions...")
 
     aggregated_input = "=== STUDENT TEST ANALYSIS - ALL RESPONSES ===\n\n"
     for analysis in all_analyses:
@@ -868,7 +869,7 @@ def dashboard_page():
                         dates.append(dt.strftime('%b %d'))
                     else:
                         dates.append('Unknown')
-                    
+
                     # Add score
                     scores.append(t.get('total_score', 0))
                 except Exception as e:
@@ -986,7 +987,7 @@ def dashboard_page():
                     test['timestamp']).strftime('%B %d, %Y at %H:%M')
             except:
                 test_date = "Unknown date"
-            
+
             score = test.get('total_score', 0)
             percentage = (score / 10) * 100
 
@@ -1195,7 +1196,7 @@ def ai_logs_page():
                     latest_test['timestamp']).strftime('%B %d, %Y at %H:%M')
             except:
                 test_date = "Unknown date"
-            
+
             st.caption(f"Test Date: {test_date}")
 
             st.markdown("---")
