@@ -20,7 +20,7 @@ load_dotenv()
 # Page configuration
 st.set_page_config(
     page_title="AI Math Tutor",
-    page_icon="",
+    page_icon="📊",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -263,7 +263,7 @@ def detect_and_group_images(uploaded_images, log_container):
             detection_status = st.empty()
 
         detection_status.info(
-            f"Detecting question number in image {img_idx}...")
+            f"📊 Detecting question number in image {img_idx}...")
 
         image_base64 = base64.b64encode(image_bytes).decode('utf-8')
         qwen_output = process_image_with_qwen(
@@ -283,12 +283,12 @@ def detect_and_group_images(uploaded_images, log_container):
         with log_container:
             if parsed['question_number'] != 'UNKNOWN':
                 detection_status.success(
-                    f"Detected: Question {parsed['question_number']} | Topic: {parsed['topic']}")
+                    f"✅ Detected: Question {parsed['question_number']} | Topic: {parsed['topic']}")
             elif parsed['is_continuation']:
                 detection_status.warning(
-                    f"Detected: Continuation page (no question number)")
+                    f"⚠️ Detected: Continuation page (no question number)")
             else:
-                detection_status.error(f"Could not detect question number")
+                detection_status.error(f"❌ Could not detect question number")
 
             with st.expander(f"View raw detection output for Image {img_idx}"):
                 st.code(qwen_output, language="text")
@@ -324,10 +324,10 @@ def detect_and_group_images(uploaded_images, log_container):
         for q_num, images in grouped_questions.items():
             if q_num == 'UNIDENTIFIED':
                 st.error(
-                    f"Question: UNIDENTIFIED - {len(images)} image(s) could not be matched")
+                    f"❌ Question: UNIDENTIFIED - {len(images)} image(s) could not be matched")
             else:
                 st.success(
-                    f"Question {q_num}: {len(images)} image(s) grouped together")
+                    f"✅ Question {q_num}: {len(images)} image(s) grouped together")
 
         st.markdown("---")
 
@@ -395,15 +395,15 @@ def map_to_test_structure(grouped_questions, log_container):
         for idx, q_data in enumerate(test_questions, 1):
             if q_data['images']:
                 st.success(
-                    f"Q{idx} ({q_data['topic']} - Q{q_data['question_num']}): {len(q_data['images'])} image(s) - Detected as '{q_data['detected_key']}'")
+                    f"✅ Q{idx} ({q_data['topic']} - Q{q_data['question_num']}): {len(q_data['images'])} image(s) - Detected as '{q_data['detected_key']}'")
             else:
                 st.error(
-                    f"Q{idx} ({q_data['topic']} - Q{q_data['question_num']}): NO IMAGES FOUND")
+                    f"❌ Q{idx} ({q_data['topic']} - Q{q_data['question_num']}): NO IMAGES FOUND")
 
         # Handle unidentified images
         if 'UNIDENTIFIED' in grouped_questions:
             st.warning(
-                f"WARNING: {len(grouped_questions['UNIDENTIFIED'])} image(s) could not be identified")
+                f"⚠️ WARNING: {len(grouped_questions['UNIDENTIFIED'])} image(s) could not be identified")
             with st.expander("View unidentified images"):
                 for img_data in grouped_questions['UNIDENTIFIED']:
                     st.markdown(f"**Image {img_data['image_idx']}:**")
@@ -452,7 +452,7 @@ def analyze_test_images_with_streaming(questions_data, log_container):
             # Step: Qwen Extraction (already done in detection phase, just consolidate)
             qwen_container = st.container()
             with qwen_container:
-                st.markdown("#### Qwen-VL Text Extraction")
+                st.markdown("#### 🔍 Qwen-VL Text Extraction")
                 qwen_status = st.empty()
                 qwen_output_box = st.empty()
 
@@ -462,7 +462,7 @@ def analyze_test_images_with_streaming(questions_data, log_container):
         # Extract text from all images
         extracted_texts = []
         for img_idx, image_bytes in enumerate(images_list, 1):
-            qwen_status.info(f"Extracting page {img_idx}/{num_images}...")
+            qwen_status.info(f"📄 Extracting page {img_idx}/{num_images}...")
 
             image_base64 = base64.b64encode(image_bytes).decode('utf-8')
             qwen_output = process_image_with_qwen(image_base64, QWEN_PROMPT)
@@ -475,19 +475,19 @@ def analyze_test_images_with_streaming(questions_data, log_container):
         # Display Qwen output
         with log_container:
             qwen_status.success(
-                f"Extraction complete ({num_images} page(s))")
+                f"✅ Extraction complete ({num_images} page(s))")
             with qwen_output_box.container():
                 st.code(combined_extraction, language="text")
 
         # DeepSeek Analysis
         with log_container:
-            st.markdown("#### DeepSeek Analysis & Scoring")
+            st.markdown("#### 🤖 DeepSeek Analysis & Scoring")
             deepseek_status = st.empty()
             deepseek_output_box = st.empty()
 
         status_text.text(
             f"Processing {topic} - Question {question_num} (Analyzing solution)...")
-        deepseek_status.info("Analyzing student's solution...")
+        deepseek_status.info("🔬 Analyzing student's solution...")
 
         # Get actual question
         actual_question = MATH_QUESTIONS[topic][f"question_{question_num}"]
@@ -510,15 +510,15 @@ STUDENT'S EXTRACTED SOLUTION (Complete):
 
         # Display DeepSeek output
         with log_container:
-            deepseek_status.success(f"Analysis complete - Score: {score}/1")
+            deepseek_status.success(f"✅ Analysis complete - Score: {score}/1")
             with deepseek_output_box.container():
                 st.markdown(deepseek_output)
 
             # Score indicator
             if score == 1:
-                st.success(f"Result: Correct (Score: {score}/1)")
+                st.success(f"🎯 Result: Correct (Score: {score}/1)")
             else:
-                st.error(f"Result: Incorrect (Score: {score}/1)")
+                st.error(f"❌ Result: Incorrect (Score: {score}/1)")
 
             st.markdown("---")
             st.markdown("---")
@@ -542,7 +542,7 @@ STUDENT'S EXTRACTED SOLUTION (Complete):
         final_output_box = st.empty()
 
     status_text.text("Generating comprehensive feedback...")
-    final_status.info("Analyzing overall performance across all questions...")
+    final_status.info("🎓 Analyzing overall performance across all questions...")
 
     aggregated_input = "=== STUDENT TEST ANALYSIS - ALL RESPONSES ===\n\n"
     for analysis in all_analyses:
@@ -557,13 +557,13 @@ STUDENT'S EXTRACTED SOLUTION (Complete):
     final_feedback = process_with_deepseek(aggregated_input, DEEPSEEK_PROMPT_2)
 
     with log_container:
-        final_status.success("Comprehensive analysis complete!")
+        final_status.success("✅ Comprehensive analysis complete!")
         with final_output_box.container():
             st.markdown("#### Aggregated Input to DeepSeek")
             with st.expander("View aggregated data sent to AI", expanded=False):
                 st.code(aggregated_input, language="text")
 
-            st.markdown("#### Final Student Feedback")
+            st.markdown("#### 📝 Final Student Feedback")
             st.info(final_feedback)
 
     progress_bar.empty()
@@ -603,32 +603,32 @@ def render_sidebar():
     user = st.session_state.user
 
     with st.sidebar:
-        st.markdown("### User Profile")
+        st.markdown("### 👤 User Profile")
         st.markdown(f"**Name:** {user['name']}")
         st.markdown(f"**Grade:** {user['grade']}")
         st.markdown(f"**Age:** {user['age']}")
         st.markdown("---")
 
         # Navigation buttons
-        if st.button("Dashboard", use_container_width=True,
+        if st.button("📊 Dashboard", use_container_width=True,
                      type="primary" if st.session_state.page == 'dashboard' else "secondary"):
             st.session_state.page = 'dashboard'
             st.rerun()
 
-        if st.button("Take New Test", use_container_width=True,
+        if st.button("📝 Take New Test", use_container_width=True,
                      type="primary" if st.session_state.page == 'test' else "secondary"):
             st.session_state.page = 'test'
             st.session_state.uploaded_images = []
             st.rerun()
 
-        if st.button("View AI Logs", use_container_width=True,
+        if st.button("🔍 View AI Logs", use_container_width=True,
                      type="primary" if st.session_state.page == 'ai_logs' else "secondary"):
             st.session_state.page = 'ai_logs'
             st.rerun()
 
         st.markdown("---")
 
-        if st.button("Logout", use_container_width=True):
+        if st.button("🚪 Logout", use_container_width=True):
             for key in list(st.session_state.keys()):
                 del st.session_state[key]
             st.rerun()
@@ -638,7 +638,7 @@ def render_sidebar():
 
 def login_page():
     """Login page UI"""
-    st.title("AI Math Tutor")
+    st.title("🎓 AI Math Tutor")
 
     col1, col2, col3 = st.columns([1, 2, 1])
 
@@ -684,7 +684,7 @@ def login_page():
 
 def signup_page():
     """Sign up page UI"""
-    st.title("AI Math Tutor - Professional Edition")
+    st.title("🎓 AI Math Tutor - Professional Edition")
 
     col1, col2, col3 = st.columns([1, 2, 1])
 
@@ -805,7 +805,7 @@ def dashboard_page():
     render_sidebar()
 
     # Main content
-    st.title("Progress Dashboard")
+    st.title("📊 Progress Dashboard")
 
     # Get user's test history
     tests = get_user_tests(user['username'])
@@ -852,9 +852,29 @@ def dashboard_page():
         if len(tests) > 1:
             st.markdown("### Score Progress Over Time")
 
-            dates = [datetime.fromisoformat(t['timestamp']).strftime(
-                '%b %d') for t in reversed(tests)]
-            scores = [t.get('total_score', 0) for t in reversed(tests)]
+            # Safe date parsing with error handling
+            dates = []
+            scores = []
+            for t in reversed(tests):
+                try:
+                    timestamp = t.get('timestamp', '')
+                    if timestamp:
+                        # Handle both ISO format and other formats
+                        if isinstance(timestamp, str):
+                            dt = datetime.fromisoformat(
+                                timestamp.replace('Z', '+00:00'))
+                        else:
+                            dt = timestamp
+                        dates.append(dt.strftime('%b %d'))
+                    else:
+                        dates.append('Unknown')
+                    
+                    # Add score
+                    scores.append(t.get('total_score', 0))
+                except Exception as e:
+                    print(f"Error parsing date: {e}")
+                    dates.append('Unknown')
+                    scores.append(0)
 
             fig = go.Figure()
             fig.add_trace(go.Scatter(
@@ -918,7 +938,7 @@ def dashboard_page():
 
         # AI Analysis
         st.markdown("---")
-        st.markdown("### AI Tutor Analysis")
+        st.markdown("### 🤖 AI Tutor Analysis")
 
         latest_test = tests[0]
         if latest_test.get('final_feedback'):
@@ -931,38 +951,42 @@ def dashboard_page():
             col1, col2 = st.columns(2)
 
             with col1:
-                st.markdown("#### Strong Areas")
+                st.markdown("#### 💪 Strong Areas")
                 if ai_analysis['strong_topics']:
                     for topic in ai_analysis['strong_topics']:
-                        st.success(f"- {topic}")
+                        st.success(f"✅ {topic}")
                 else:
                     st.info("Keep practicing to build your strengths!")
 
             with col2:
-                st.markdown("#### Areas to Improve")
+                st.markdown("#### 📈 Areas to Improve")
                 if ai_analysis['weak_topics']:
                     for topic in ai_analysis['weak_topics']:
-                        st.warning(f"- {topic}")
+                        st.warning(f"⚠️ {topic}")
                 else:
                     st.success("All topics are strong!")
 
             if ai_analysis['recommendations']:
-                st.markdown("#### Study Recommendations")
+                st.markdown("#### 📚 Study Recommendations")
                 st.markdown(ai_analysis['recommendations'])
 
             if ai_analysis['encouragement']:
-                st.markdown("#### Message from Your AI Tutor")
+                st.markdown("#### 💬 Message from Your AI Tutor")
                 st.success(ai_analysis['encouragement'])
         else:
             st.warning("AI analysis not available for latest test.")
 
         # Recent test results
         st.markdown("---")
-        st.markdown("### Recent Test Results")
+        st.markdown("### 📝 Recent Test Results")
 
         for idx, test in enumerate(tests[:3], 1):
-            test_date = datetime.fromisoformat(
-                test['timestamp']).strftime('%B %d, %Y at %H:%M')
+            try:
+                test_date = datetime.fromisoformat(
+                    test['timestamp']).strftime('%B %d, %Y at %H:%M')
+            except:
+                test_date = "Unknown date"
+            
             score = test.get('total_score', 0)
             percentage = (score / 10) * 100
 
@@ -974,7 +998,7 @@ def dashboard_page():
                     for topic in MATH_TOPICS:
                         topic_score = test.get(
                             'topic_scores', {}).get(topic, 0)
-                        status = "Excellent" if topic_score == 2 else "Good" if topic_score == 1 else "Needs Improvement"
+                        status = "✅ Excellent" if topic_score == 2 else "👍 Good" if topic_score == 1 else "📚 Needs Improvement"
                         st.write(f"{topic}: {topic_score}/2 - {status}")
 
                 with col2:
@@ -995,7 +1019,7 @@ def test_page():
     render_sidebar()
 
     # Main content
-    st.title("Mathematics Assessment")
+    st.title("📝 Mathematics Assessment")
 
     st.info("""
     **Test Instructions:**
@@ -1013,7 +1037,7 @@ def test_page():
     # Display all questions organized by topic
     question_counter = 1
     for topic in MATH_TOPICS:
-        st.markdown(f"### {topic}")
+        st.markdown(f"### 📚 {topic}")
         st.caption(TOPIC_DESCRIPTIONS[topic])
 
         col1, col2 = st.columns(2)
@@ -1031,7 +1055,7 @@ def test_page():
         st.markdown("---")
 
     # Collective upload section
-    st.markdown("## Upload All Solutions")
+    st.markdown("## 📤 Upload All Solutions")
     st.markdown("### Upload all your solution images below")
 
     st.warning("""
@@ -1051,10 +1075,10 @@ def test_page():
     if uploaded_files:
         st.session_state.uploaded_images = [
             file.read() for file in uploaded_files]
-        st.success(f"Uploaded {len(uploaded_files)} image(s)")
+        st.success(f"✅ Uploaded {len(uploaded_files)} image(s)")
 
         # Show preview of uploaded images
-        st.markdown("### Preview of Uploaded Images")
+        st.markdown("### 👁️ Preview of Uploaded Images")
         cols = st.columns(min(4, len(uploaded_files)))
         for idx, img_bytes in enumerate(st.session_state.uploaded_images):
             with cols[idx % 4]:
@@ -1081,7 +1105,7 @@ def test_page():
     col1, col2, col3 = st.columns([1, 1, 1])
 
     with col2:
-        if st.button("Submit Test for AI Analysis", use_container_width=True, type="primary", disabled=(uploaded_count == 0)):
+        if st.button("🚀 Submit Test for AI Analysis", use_container_width=True, type="primary", disabled=(uploaded_count == 0)):
             if uploaded_count > 0:
                 # Navigate to AI logs page and start processing
                 st.session_state.page = 'ai_logs'
@@ -1097,7 +1121,7 @@ def ai_logs_page():
     render_sidebar()
 
     # Main content
-    st.title("AI Processing Logs")
+    st.title("🔍 AI Processing Logs")
     st.markdown("Real-time view of AI pipeline processing your test")
     st.markdown("---")
 
@@ -1107,7 +1131,7 @@ def ai_logs_page():
         log_container = st.container()
 
         with log_container:
-            st.info("Starting AI analysis pipeline...")
+            st.info("🚀 Starting AI analysis pipeline...")
             st.markdown("---")
 
         # Get uploaded images
@@ -1132,7 +1156,7 @@ def ai_logs_page():
         with log_container:
             if len(valid_questions) < 10:
                 st.warning(
-                    f"Warning: Only {len(valid_questions)}/10 questions were successfully mapped. Proceeding with available questions...")
+                    f"⚠️ Warning: Only {len(valid_questions)}/10 questions were successfully mapped. Proceeding with available questions...")
 
         # Step 3: Run analysis with streaming
         result = analyze_test_images_with_streaming(
@@ -1149,7 +1173,7 @@ def ai_logs_page():
         with log_container:
             st.markdown("---")
             st.success(
-                "Test analysis complete! Results saved to your dashboard.")
+                "🎉 Test analysis complete! Results saved to your dashboard.")
             st.balloons()
 
         # Clear uploaded images
@@ -1166,8 +1190,12 @@ def ai_logs_page():
             st.markdown("### Most Recent Test Analysis")
 
             latest_test = tests[0]
-            test_date = datetime.fromisoformat(
-                latest_test['timestamp']).strftime('%B %d, %Y at %H:%M')
+            try:
+                test_date = datetime.fromisoformat(
+                    latest_test['timestamp']).strftime('%B %d, %Y at %H:%M')
+            except:
+                test_date = "Unknown date"
+            
             st.caption(f"Test Date: {test_date}")
 
             st.markdown("---")
@@ -1182,20 +1210,20 @@ def ai_logs_page():
 
                     st.markdown("#### Step: Qwen-VL Text Extraction")
                     st.success(
-                        f"Extraction complete ({analysis['num_pages']} page(s))")
+                        f"✅ Extraction complete ({analysis['num_pages']} page(s))")
                     st.code(analysis['qwen_output'], language="text")
 
                     st.markdown("#### Step: DeepSeek Analysis & Scoring")
                     st.success(
-                        f"Analysis complete - Score: {analysis['score']}/1")
+                        f"✅ Analysis complete - Score: {analysis['score']}/1")
                     st.markdown(analysis['deepseek_output'])
 
                     if analysis['score'] == 1:
                         st.success(
-                            f"Result: Correct (Score: {analysis['score']}/1)")
+                            f"🎯 Result: Correct (Score: {analysis['score']}/1)")
                     else:
                         st.error(
-                            f"Result: Incorrect (Score: {analysis['score']}/1)")
+                            f"❌ Result: Incorrect (Score: {analysis['score']}/1)")
 
                     st.markdown("---")
                     st.markdown("---")
@@ -1209,7 +1237,7 @@ def ai_logs_page():
                 with st.expander("View aggregated data sent to AI", expanded=False):
                     st.code(latest_test['aggregated_input'], language="text")
 
-            st.markdown("#### Final Student Feedback")
+            st.markdown("#### 📝 Final Student Feedback")
             if 'final_feedback' in latest_test:
                 st.info(latest_test['final_feedback'])
 
