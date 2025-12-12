@@ -20,7 +20,7 @@ load_dotenv()
 # Page configuration
 st.set_page_config(
     page_title="AI Math Tutor",
-    page_icon="📚",
+    page_icon="",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -209,7 +209,7 @@ def analyze_all_images_simple(all_image_bytes, log_container):
     status_text = st.empty()
 
     with log_container:
-        st.markdown("## 🔍 Step 1: Qwen-VL Text Extraction from All Images")
+        st.markdown("##  Step 1: Qwen-VL Text Extraction from All Images")
         st.info(
             f"Extracting text from {len(all_image_bytes)} uploaded image(s)...")
         st.markdown("---")
@@ -221,7 +221,7 @@ def analyze_all_images_simple(all_image_bytes, log_container):
             f"Extracting text from image {idx}/{len(all_image_bytes)}...")
 
         with log_container:
-            st.markdown(f"### 📄 Processing Image {idx}/{len(all_image_bytes)}")
+            st.markdown(f"###  Processing Image {idx}/{len(all_image_bytes)}")
             extraction_status = st.empty()
             extraction_output = st.empty()
 
@@ -245,7 +245,7 @@ def analyze_all_images_simple(all_image_bytes, log_container):
         st.markdown("### ✅ All Extractions Complete")
         st.success(
             f"Successfully extracted text from {len(all_image_bytes)} images")
-        with st.expander("📋 View Combined Extracted Text", expanded=False):
+        with st.expander(" View Combined Extracted Text", expanded=False):
             st.code(combined_extraction, language="text")
         st.markdown("---")
         st.markdown("---")
@@ -385,12 +385,12 @@ def render_sidebar():
         st.markdown("---")
 
         # Navigation buttons
-        if st.button("📊 Dashboard", use_container_width=True,
+        if st.button(" Dashboard", use_container_width=True,
                      type="primary" if st.session_state.page == 'dashboard' else "secondary"):
             st.session_state.page = 'dashboard'
             st.rerun()
 
-        if st.button("📝 Take New Test", use_container_width=True,
+        if st.button(" Take New Test", use_container_width=True,
                      type="primary" if st.session_state.page == 'test' else "secondary"):
             st.session_state.page = 'test'
             st.session_state.uploaded_images = []
@@ -403,7 +403,7 @@ def render_sidebar():
 
         st.markdown("---")
 
-        if st.button("🚪 Logout", use_container_width=True):
+        if st.button(" Logout", use_container_width=True):
             for key in list(st.session_state.keys()):
                 del st.session_state[key]
             st.rerun()
@@ -413,12 +413,12 @@ def render_sidebar():
 
 def login_page():
     """Login page UI"""
-    st.title("📚 AI Math Tutor")
+    st.title(" AI Math Tutor")
 
     col1, col2, col3 = st.columns([1, 2, 1])
 
     with col2:
-        st.markdown("### 🔐 Login to Your Account")
+        st.markdown("###  Login to Your Account")
         st.markdown("---")
 
         with st.form("login_form"):
@@ -459,12 +459,12 @@ def login_page():
 
 def signup_page():
     """Sign up page UI"""
-    st.title("📚 AI Math Tutor")
+    st.title(" AI Math Tutor")
 
     col1, col2, col3 = st.columns([1, 2, 1])
 
     with col2:
-        st.markdown("### 📝 Student Registration")
+        st.markdown("###  Student Registration")
         st.markdown("---")
 
         with st.form("signup_form"):
@@ -587,12 +587,12 @@ def dashboard_page():
 
     if not tests:
         st.info("👋 Welcome! You haven't taken any tests yet.")
-        st.markdown("### 🚀 Get Started")
+        st.markdown("###  Get Started")
         st.markdown(
-            "Click **'📝 Take New Test'** in the sidebar to begin your first mathematics assessment.")
+            "Click **' Take New Test'** in the sidebar to begin your first mathematics assessment.")
 
         st.markdown("---")
-        st.markdown("### 📚 Topics Covered in Each Test")
+        st.markdown("###  Topics Covered in Each Test")
         st.caption("Each test contains 10 questions (2 per topic)")
 
         cols = st.columns(3)
@@ -606,26 +606,26 @@ def dashboard_page():
         col1, col2, col3, col4 = st.columns(4)
 
         with col1:
-            st.metric("📝 Total Tests", len(tests))
+            st.metric(" Total Tests", len(tests))
 
         with col2:
             avg_score = sum(t.get('total_score', 0)
                             for t in tests) / len(tests)
-            st.metric("📊 Average Score", f"{avg_score:.1f}/10")
+            st.metric(" Average Score", f"{avg_score:.1f}/10")
 
         with col3:
             latest_score = tests[0].get('total_score', 0)
-            st.metric("🎯 Latest Score", f"{latest_score}/10")
+            st.metric(" Latest Score", f"{latest_score}/10")
 
         with col4:
             avg_percentage = (avg_score / 10) * 100
-            st.metric("📈 Average %", f"{avg_percentage:.0f}%")
+            st.metric(" Average %", f"{avg_percentage:.0f}%")
 
         st.markdown("---")
 
         # Progress over time
         if len(tests) > 1:
-            st.markdown("### 📈 Score Progress Over Time")
+            st.markdown("###  Score Progress Over Time")
 
             # Safe date parsing
             dates = []
@@ -682,7 +682,7 @@ def dashboard_page():
             ai_analysis = parse_ai_feedback(latest_test['final_feedback'])
 
             if ai_analysis['overall']:
-                st.markdown("#### 📋 Overall Performance")
+                st.markdown("####  Overall Performance")
                 st.info(ai_analysis['overall'])
 
             col1, col2 = st.columns(2)
@@ -704,7 +704,7 @@ def dashboard_page():
                     st.success("All topics are strong!")
 
             if ai_analysis['recommendations']:
-                st.markdown("#### 📚 Study Recommendations")
+                st.markdown("####  Study Recommendations")
                 st.markdown(ai_analysis['recommendations'])
 
             if ai_analysis['encouragement']:
@@ -715,7 +715,7 @@ def dashboard_page():
 
         # Recent test results
         st.markdown("---")
-        st.markdown("### 📋 Recent Test Results")
+        st.markdown("###  Recent Test Results")
 
         for idx, test in enumerate(tests[:5], 1):
             try:
@@ -733,7 +733,7 @@ def dashboard_page():
 
                 with col1:
                     if test.get('deepseek1_analysis'):
-                        st.markdown("**📊 Question Analysis:**")
+                        st.markdown("** Question Analysis:**")
                         st.markdown(test['deepseek1_analysis'])
 
                 with col2:
@@ -755,10 +755,10 @@ def test_page():
     render_sidebar()
 
     # Main content
-    st.title("📝 Mathematics Assessment")
+    st.title(" Mathematics Assessment")
 
     st.info("""
-    **📋 Test Instructions:**
+    ** Test Instructions:**
     - This test contains **10 questions** (2 from each topic)
     - Review all questions below
     - Write your solutions on paper (you can use multiple pages per question)
@@ -773,7 +773,7 @@ def test_page():
     # Display all questions organized by topic
     question_counter = 1
     for topic in MATH_TOPICS:
-        st.markdown(f"### 📚 {topic}")
+        st.markdown(f"###  {topic}")
         st.caption(TOPIC_DESCRIPTIONS[topic])
 
         col1, col2 = st.columns(2)
@@ -791,7 +791,7 @@ def test_page():
         st.markdown("---")
 
     # Collective upload section at the end
-    st.markdown("## 📤 Upload All Your Solutions")
+    st.markdown("##  Upload All Your Solutions")
     st.markdown("### Upload all your solution images below")
 
     st.warning("""
@@ -804,7 +804,7 @@ def test_page():
     """)
 
     uploaded_files = st.file_uploader(
-        "📁 Select all solution images (you can upload multiple files at once)",
+        " Select all solution images (you can upload multiple files at once)",
         type=['png', 'jpg', 'jpeg'],
         accept_multiple_files=True,
         key="collective_upload"
@@ -816,7 +816,7 @@ def test_page():
         st.success(f"✅ Uploaded {len(uploaded_files)} image(s)")
 
         # Show preview of uploaded images
-        st.markdown("### 🖼️ Preview of Uploaded Images")
+        st.markdown("###  Preview of Uploaded Images")
 
         # Display images in a grid
         num_cols = 4
@@ -832,7 +832,7 @@ def test_page():
     st.markdown("---")
 
     # Submit button
-    st.markdown("### 🚀 Ready to Submit?")
+    st.markdown("###  Ready to Submit?")
 
     uploaded_count = len(st.session_state.uploaded_images)
     st.write(f"**Total images uploaded: {uploaded_count}**")
@@ -840,12 +840,12 @@ def test_page():
     if uploaded_count == 0:
         st.warning("⚠️ Please upload at least one solution image.")
     else:
-        st.info(f"✅ Ready to analyze {uploaded_count} image(s)")
+        st.info(f" Ready to analyze {uploaded_count} image(s)")
 
     col1, col2, col3 = st.columns([1, 1, 1])
 
     with col2:
-        if st.button("🚀 Submit Test for AI Analysis", use_container_width=True, type="primary", disabled=(uploaded_count == 0)):
+        if st.button(" Submit Test for AI Analysis", use_container_width=True, type="primary", disabled=(uploaded_count == 0)):
             if uploaded_count > 0:
                 # Navigate to AI logs page and start processing
                 st.session_state.page = 'ai_logs'
@@ -871,7 +871,7 @@ def ai_logs_page():
         log_container = st.container()
 
         with log_container:
-            st.info("🚀 Starting AI analysis pipeline...")
+            st.info(" Starting AI analysis pipeline...")
             st.markdown("---")
 
         # Get uploaded images
@@ -906,7 +906,7 @@ def ai_logs_page():
         with log_container:
             st.markdown("---")
             st.success(
-                "✅ Test analysis complete! Results saved to your dashboard.")
+                " Test analysis complete! Results saved to your dashboard.")
             st.balloons()
 
         # Clear uploaded images
@@ -918,9 +918,9 @@ def ai_logs_page():
 
         if not tests:
             st.info(
-                "📋 No test results available yet. Take a test to see AI processing logs.")
+                " No test results available yet. Take a test to see AI processing logs.")
         else:
-            st.markdown("### 📊 Most Recent Test Analysis")
+            st.markdown("###  Most Recent Test Analysis")
 
             latest_test = tests[0]
             try:
@@ -929,9 +929,9 @@ def ai_logs_page():
             except:
                 test_date = "Unknown date"
 
-            st.caption(f"📅 Test Date: {test_date}")
+            st.caption(f" Test Date: {test_date}")
             st.caption(
-                f"🖼️ Images Analyzed: {latest_test.get('number_of_images', 'N/A')}")
+                f" Images Analyzed: {latest_test.get('number_of_images', 'N/A')}")
 
             st.markdown("---")
 
@@ -939,7 +939,7 @@ def ai_logs_page():
             if latest_test.get('aggregated_input'):
                 st.markdown("## 🔍 Step 1: Qwen-VL Text Extraction")
                 st.success("✅ Text extraction from all images complete")
-                with st.expander("📋 View All Extracted Text", expanded=False):
+                with st.expander(" View All Extracted Text", expanded=False):
                     st.code(latest_test['aggregated_input'], language="text")
                 st.markdown("---")
 
@@ -947,13 +947,13 @@ def ai_logs_page():
             if latest_test.get('deepseek1_analysis'):
                 st.markdown("## 🤖 Step 2: DeepSeek Analysis & Grading")
                 st.success("✅ Question-by-question analysis complete")
-                with st.expander("📊 View Detailed Analysis", expanded=True):
+                with st.expander(" View Detailed Analysis", expanded=True):
                     st.markdown(latest_test['deepseek1_analysis'])
                 st.markdown("---")
 
             # Display final feedback
             if latest_test.get('final_feedback'):
-                st.markdown("## 📋 Step 3: Comprehensive Final Report")
+                st.markdown("##  Step 3: Comprehensive Final Report")
                 st.success("✅ Final assessment report generated")
                 st.info(latest_test['final_feedback'])
 
