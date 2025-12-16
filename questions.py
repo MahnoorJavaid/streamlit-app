@@ -3,7 +3,7 @@ MATH_QUESTIONS = {
         "question_1": "Solve for x: 2x + 5 = 13",
         "question_2": "Factorize: x² + 5x + 6"
     },
-    "Rational Number System": {
+    "Real Number System": {
         "question_1": "Simplify: (3/4) + (5/6) - (1/2)",
         "question_2": "Express 0.75 as a fraction in simplest form"
     },
