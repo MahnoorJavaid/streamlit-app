@@ -32,7 +32,7 @@ st.markdown("""
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     
-    /* Professional color scheme */
+    /* color scheme */
     :root {
         --primary-color: #2C3E50;
         --secondary-color: #3498DB;
@@ -69,7 +69,7 @@ st.markdown("""
         line-height: 1.6;
     }
     
-    /* Professional tables */
+    /*  tables */
     .dataframe {
         border: 1px solid #ddd;
         border-radius: 4px;
@@ -104,7 +104,7 @@ UPLOADS_FOLDER = "uploads"
 # Math topics - 2 questions each = 10 total
 MATH_TOPICS = [
     "Algebra",
-    "Rational Number System",
+    "Real Number System",
     "Ratio and Proportion",
     "Percentage",
     "Geometry"
@@ -112,7 +112,7 @@ MATH_TOPICS = [
 
 TOPIC_DESCRIPTIONS = {
     "Algebra": "Linear Equations, Quadratic Equations, Polynomials",
-    "Rational Number System": "Rational Numbers, Operations, Properties",
+    "Real Number System": "Real Numbers, Operations, Properties",
     "Ratio and Proportion": "Ratios, Proportions, Direct/Inverse Variation",
     "Percentage": "Percentage Calculations, Applications, Problems",
     "Geometry": "Shapes, Area, Perimeter, Volume, Theorems"
